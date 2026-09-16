@@ -1,0 +1,93 @@
+name: Build Trigger Indicators Android64
+
+on:
+  workflow_dispatch:
+    inputs:
+      geode_version:
+        description: 'Geode SDK version'
+        required: false
+        default: '5.5.3'
+      gd_version:
+        description: 'GD Android version'
+        required: false
+        default: '2.2081'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+
+      - name: Download Trigger Indicators source
+        run: |
+          git clone --depth 1 --recurse-submodules \
+            https://github.com/Nwo5-trg/Trigger-Indicators-2.git source
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply GD ${{ inputs.gd_version }} / Geode ${{ inputs.geode_version }} metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+
+          gd   = "${{ inputs.gd_version }}"
+          geode = "${{ inputs.geode_version }}"
+
+          mod_path = pathlib.Path("source/mod.json")
+          if not mod_path.exists():
+              raise SystemExit("source/mod.json not found!")
+
+          d = json.loads(mod_path.read_text(encoding="utf-8"))
+          d["geode"] = geode
+          d.setdefault("gd", {})
+          d["gd"].update({
+              "win": gd, "android": gd, "mac": gd, "ios": gd,
+          })
+          mod_path.write_text(json.dumps(d, indent=4), encoding="utf-8")
+
+          print("version  =", d.get("version"))
+          print("geode    =", d.get("geode"))
+          print("gd       =", d.get("gd"))
+          PY
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+      - name: Build Android64
+        id: build
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          path: source
+          target: Android64
+          sdk: given
+          android-min-sdk: 23
+          use-lto: false
+
+      - name: Verify Android64 binary is inside package
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUTPUT="${{ steps.build.outputs.build-output }}"
+          FILE=$(find "$OUTPUT" -name '*.geode' | head -n 1)
+          test -n "$FILE" || { echo "No .geode file found"; exit 1; }
+          echo "Built: $FILE"
+          unzip -l "$FILE" | tee package-contents.txt
+          unzip -l "$FILE" | grep -q 'nwo5\.trigger_indicators_v2\.android64\.so' \
+            || { echo "android64 .so missing"; exit 1; }
+          echo "OK: android64 .so found"
+
+      - name: Upload ready mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trigger-Indicators-Android64-GD-${{ inputs.gd_version }}
+          path: ${{ steps.build.outputs.build-output }}
+          if-no-files-found: error

@@ -5,6 +5,7 @@ on:
     branches: [nft-recorder]
     paths:
       - 'NFTRecorderProject.zip'
+      - 'patches/**'
       - '.github/workflows/build-nft-recorder.yml'
   workflow_dispatch:
 
@@ -15,13 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack project
+      - name: Unpack and patch v2
         run: |
           rm -rf buildsrc
           mkdir buildsrc
           unzip -q NFTRecorderProject.zip -d buildsrc
-          echo "android.useAndroidX=true" > buildsrc/NFTRecorderProject/nft-recorder/gradle.properties
-          sed -i 's/Exception last = null;/Throwable last = null;/' buildsrc/NFTRecorderProject/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/MainActivity.java
+          cd buildsrc
+          patch -p0 < ../patches/H264LottieRenderer-v2.patch
+          patch -p0 < ../patches/MainActivity-v2.patch
+          echo "android.useAndroidX=true" > NFTRecorderProject/nft-recorder/gradle.properties
 
       - uses: actions/setup-java@v5
         with:
@@ -49,6 +52,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NFT-Recorder-1080p60
+          name: NFT-Recorder-v2-Web-Batch
           path: buildsrc/NFTRecorderProject/nft-recorder/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

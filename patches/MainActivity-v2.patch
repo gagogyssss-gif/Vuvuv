@@ -1,0 +1,377 @@
+--- NFTRecorderProject/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/MainActivity.java	2026-09-18 23:46:45.556501924 +0000
++++ NFTRecorderV2/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/MainActivity.java	2026-09-19 00:35:51.795341524 +0000
+@@ -3,156 +3,294 @@
+ import android.app.Activity;
+ import android.os.Bundle;
+ import android.view.Gravity;
++import android.view.View;
+ import android.view.ViewGroup;
++import android.webkit.CookieManager;
++import android.webkit.WebChromeClient;
++import android.webkit.WebSettings;
++import android.webkit.WebView;
++import android.webkit.WebViewClient;
+ import android.widget.Button;
+ import android.widget.EditText;
+ import android.widget.LinearLayout;
++import android.widget.ScrollView;
+ import android.widget.TextView;
+ 
+-import com.airbnb.lottie.LottieAnimationView;
+ import com.airbnb.lottie.LottieComposition;
+ import com.airbnb.lottie.LottieCompositionFactory;
+-import com.airbnb.lottie.LottieDrawable;
+ import com.airbnb.lottie.LottieResult;
+ 
+ import java.util.Locale;
+ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.Executors;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
+ 
+ public class MainActivity extends Activity {
+     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+-    private EditText input;
+-    private Button record;
++    private EditText input, fromInput, toInput, secondsInput;
++    private Button loadWeb, batch, webRec;
+     private TextView status;
+-    private LottieAnimationView preview;
++    private WebView web;
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+         super.onCreate(savedInstanceState);
++        int pad = dp(12);
+ 
+-        int pad = dp(16);
++        ScrollView scroll = new ScrollView(this);
+         LinearLayout root = new LinearLayout(this);
+         root.setOrientation(LinearLayout.VERTICAL);
+         root.setPadding(pad, pad, pad, pad);
+         root.setGravity(Gravity.CENTER_HORIZONTAL);
++        scroll.addView(root);
+ 
+         TextView title = new TextView(this);
+-        title.setText("NFT Recorder — 1080p60");
+-        title.setTextSize(22);
++        title.setText("NFT Recorder v2 — Batch + Web Card");
++        title.setTextSize(21);
+         title.setGravity(Gravity.CENTER);
+-        root.addView(title, new LinearLayout.LayoutParams(
+-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++        root.addView(title, matchWrap());
+ 
+         input = new EditText(this);
+         input.setSingleLine(true);
+-        input.setHint("https://t.me/nft/PlushPepe-1");
+-        LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(
+-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+-        inputLp.topMargin = dp(12);
+-        root.addView(input, inputLp);
+-
+-        preview = new LottieAnimationView(this);
+-        preview.setRepeatCount(LottieDrawable.INFINITE);
+-        LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(dp(280), dp(280));
+-        previewLp.topMargin = dp(12);
+-        root.addView(preview, previewLp);
+-
+-        record = new Button(this);
+-        record.setText("REC 1080p / 60 FPS");
+-        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(
+-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+-        buttonLp.topMargin = dp(12);
+-        root.addView(record, buttonLp);
++        input.setHint("t.me/nft/... | fragment.com/gift/... | getgems.io/...");
++        root.addView(input, margin(matchWrap(), 8));
++
++        LinearLayout range = new LinearLayout(this);
++        range.setOrientation(LinearLayout.HORIZONTAL);
++        fromInput = numberField("From", 1);
++        toInput = numberField("To", 100);
++        secondsInput = numberField("Sec", 4);
++        range.addView(fromInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
++        range.addView(toInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
++        range.addView(secondsInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
++        root.addView(range, margin(matchWrap(), 6));
++
++        loadWeb = new Button(this);
++        loadWeb.setText("OPEN WEB / ZOOM CARD");
++        root.addView(loadWeb, margin(matchWrap(), 6));
++
++        web = new WebView(this);
++        configureWebView();
++        LinearLayout.LayoutParams webLp = new LinearLayout.LayoutParams(
++                ViewGroup.LayoutParams.MATCH_PARENT, dp(430));
++        webLp.topMargin = dp(6);
++        root.addView(web, webLp);
++
++        webRec = new Button(this);
++        webRec.setText("REC VISIBLE CARD — 1080p60");
++        root.addView(webRec, margin(matchWrap(), 6));
++
++        batch = new Button(this);
++        batch.setText("BATCH RENDER FROM → TO");
++        root.addView(batch, margin(matchWrap(), 6));
+ 
+         status = new TextView(this);
+-        status.setText("Вставь ссылку на Telegram NFT и нажми REC.");
++        status.setText("Для Fragment/Getgems: OPEN WEB → увеличь/поставь карточку по центру → REC.\nДля t.me/Fragment batch: укажи From/To → BATCH.");
+         status.setGravity(Gravity.CENTER);
+-        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(
+-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+-        statusLp.topMargin = dp(12);
+-        root.addView(status, statusLp);
+-
+-        setContentView(root);
+-        record.setOnClickListener(v -> startRender());
++        root.addView(status, margin(matchWrap(), 8));
++
++        setContentView(scroll);
++
++        loadWeb.setOnClickListener(v -> openWeb());
++        webRec.setOnClickListener(v -> recordWebCard());
++        batch.setOnClickListener(v -> startBatch());
++    }
++
++    private void configureWebView() {
++        WebSettings s = web.getSettings();
++        s.setJavaScriptEnabled(true);
++        s.setDomStorageEnabled(true);
++        s.setLoadsImagesAutomatically(true);
++        s.setBuiltInZoomControls(true);
++        s.setDisplayZoomControls(false);
++        s.setSupportZoom(true);
++        s.setUseWideViewPort(true);
++        s.setLoadWithOverviewMode(true);
++        s.setMediaPlaybackRequiresUserGesture(false);
++        CookieManager.getInstance().setAcceptCookie(true);
++        CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
++        web.setWebChromeClient(new WebChromeClient());
++        web.setWebViewClient(new WebViewClient() {
++            @Override public void onPageFinished(WebView view, String url) {
++                status.setText("Страница открыта. Если есть проверка Fragment — пройди её. Потом увеличь карточку и нажми REC.");
++            }
++        });
+     }
+ 
+-    private void startRender() {
+-        String slug = extractSlug(input.getText().toString().trim());
+-        if (slug == null || slug.isEmpty()) {
+-            status.setText("Нужна ссылка t.me/nft/... или slug подарка.");
++    private void openWeb() {
++        String url = normalizeUrl(input.getText().toString().trim());
++        if (url == null) {
++            status.setText("Нужна ссылка http/https.");
+             return;
+         }
++        status.setText("Открываю…");
++        web.loadUrl(url);
++    }
+ 
+-        record.setEnabled(false);
+-        status.setText("Загружаю анимацию…");
+-
++    private void recordWebCard() {
++        if (web.getUrl() == null) {
++            openWeb();
++            return;
++        }
++        int sec = parseInt(secondsInput, 4);
++        sec = Math.max(1, Math.min(sec, 15));
++        final int duration = sec;
++        String name = safeNameFromUrl(web.getUrl()) + "_web_1080p60.mp4";
++        setBusy(true);
++        status.setText("WEB REC: " + duration + " сек. Держи карточку по центру. Телефон может лагать.");
+         worker.submit(() -> {
+             try {
+-                LottieComposition composition = loadComposition(slug);
+-                runOnUiThread(() -> {
+-                    preview.setComposition(composition);
+-                    preview.playAnimation();
+-                    status.setText("Рендерю 1920×1080 @ 60 FPS… телефон может лагать — это нормально.");
+-                });
+-
+                 H264LottieRenderer renderer = new H264LottieRenderer(this);
+-                String savedName = renderer.render(composition, progress -> {
+-                    if (progress % 5 == 0 || progress == 100) {
+-                        runOnUiThread(() -> status.setText("Рендер: " + progress + "%"));
+-                    }
++                String saved = renderer.renderWebCard(web, duration, name, p -> {
++                    if (p % 5 == 0 || p == 100) runOnUiThread(() -> status.setText("WEB REC: " + p + "%"));
+                 });
+-
+                 runOnUiThread(() -> {
+-                    status.setText("Готово: " + savedName + "\nСохранено в Movies/NFTRecorder");
+-                    record.setEnabled(true);
++                    status.setText("Готово: " + saved + "\nMovies/NFTRecorder");
++                    setBusy(false);
+                 });
+-            } catch (Exception e) {
++            } catch (Throwable e) {
+                 runOnUiThread(() -> {
+-                    status.setText("Ошибка: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+-                    record.setEnabled(true);
++                    status.setText("WEB ошибка: " + msg(e));
++                    setBusy(false);
+                 });
+             }
+         });
+     }
+ 
++    private void startBatch() {
++        GiftRef ref = parseGiftRef(input.getText().toString().trim());
++        if (ref == null) {
++            status.setText("Для batch нужна ссылка вида t.me/nft/Name-123 или fragment.com/gift/name-123.");
++            return;
++        }
++        int from = parseInt(fromInput, ref.number);
++        int to = parseInt(toInput, from);
++        if (to < from) { int t = from; from = to; to = t; }
++        if (to - from > 2000) {
++            status.setText("За один запуск максимум 2001 номер.");
++            return;
++        }
++        final int start = from, end = to;
++        setBusy(true);
++        worker.submit(() -> runBatch(ref.base, start, end));
++    }
++
++    private void runBatch(String base, int from, int to) {
++        int ok = 0, skipped = 0;
++        H264LottieRenderer renderer = new H264LottieRenderer(this);
++        for (int n = from; n <= to; n++) {
++            if (Thread.currentThread().isInterrupted()) break;
++            String slug = base + "-" + n;
++            int index = n - from + 1;
++            int total = to - from + 1;
++            int okNow = ok, skipNow = skipped;
++            runOnUiThread(() -> status.setText("Проверяю " + slug + "  [" + index + "/" + total + "]\nготово " + okNow + " | пропущено " + skipNow));
++            try {
++                LottieComposition composition = loadComposition(slug);
++                String fileName = slug + "_1080p60.mp4";
++                renderer.render(composition, fileName, p -> {
++                    if (p == 100 || p % 20 == 0) {
++                        runOnUiThread(() -> status.setText("Рендер " + slug + ": " + p + "%  [" + index + "/" + total + "]"));
++                    }
++                });
++                ok++;
++            } catch (Throwable e) {
++                skipped++;
++            }
++        }
++        int finalOk = ok, finalSkipped = skipped;
++        runOnUiThread(() -> {
++            status.setText("Batch готов. Видео: " + finalOk + " | пропущено: " + finalSkipped + "\nMovies/NFTRecorder");
++            setBusy(false);
++        });
++    }
++
+     private LottieComposition loadComposition(String slug) throws Exception {
+         String[] candidates = new String[] {
+                 "https://nft.fragment.com/gift/" + slug + ".lottie.json",
+                 "https://nft.fragment.com/gift/" + slug.toLowerCase(Locale.ROOT) + ".lottie.json"
+         };
+-
+-        Exception last = null;
++        Throwable last = null;
+         for (String url : candidates) {
+             LottieResult<LottieComposition> result = LottieCompositionFactory.fromUrlSync(this, url, null);
+             if (result.getValue() != null) return result.getValue();
+             if (result.getException() != null) last = result.getException();
+         }
+-        throw new Exception("Не удалось получить Lottie с nft.fragment.com", last);
++        throw new Exception("not found", last);
+     }
+ 
+-    private static String extractSlug(String value) {
++    private static GiftRef parseGiftRef(String value) {
+         if (value == null) return null;
+-        value = value.trim();
+-        int idx = value.indexOf("t.me/nft/");
+-        if (idx >= 0) {
+-            value = value.substring(idx + "t.me/nft/".length());
+-        }
+-        int cut = value.length();
+-        for (char c : new char[]{'?', '#', '/'}) {
+-            int p = value.indexOf(c);
+-            if (p >= 0 && p < cut) cut = p;
+-        }
+-        value = value.substring(0, cut).trim();
+-        return value.matches("[A-Za-z0-9_-]+") ? value : null;
++        String s = value.trim();
++        Matcher m = Pattern.compile("(?:t\\.me/nft/|fragment\\.com/gift/)([A-Za-z0-9_]+)-(\\d+)", Pattern.CASE_INSENSITIVE).matcher(s);
++        if (!m.find()) return null;
++        return new GiftRef(m.group(1), Integer.parseInt(m.group(2)));
+     }
+ 
+-    private int dp(int v) {
+-        return Math.round(v * getResources().getDisplayMetrics().density);
++    private static String normalizeUrl(String s) {
++        if (s == null || s.isEmpty()) return null;
++        if (!s.startsWith("http://") && !s.startsWith("https://")) s = "https://" + s;
++        return s.matches("https?://.+") ? s : null;
+     }
+ 
+-    @Override
+-    protected void onDestroy() {
++    private static String safeNameFromUrl(String url) {
++        if (url == null) return "WebGift";
++        String s = url.replaceFirst("^https?://", "").replaceAll("[?&#].*$", "");
++        s = s.replaceAll("[^A-Za-z0-9._-]+", "_");
++        if (s.length() > 80) s = s.substring(s.length() - 80);
++        return s.isEmpty() ? "WebGift" : s;
++    }
++
++    private EditText numberField(String hint, int value) {
++        EditText e = new EditText(this);
++        e.setSingleLine(true);
++        e.setHint(hint);
++        e.setText(String.valueOf(value));
++        e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
++        return e;
++    }
++
++    private int parseInt(EditText e, int fallback) {
++        try { return Integer.parseInt(e.getText().toString().trim()); }
++        catch (Exception ignored) { return fallback; }
++    }
++
++    private void setBusy(boolean busy) {
++        runOnUiThread(() -> {
++            batch.setEnabled(!busy);
++            webRec.setEnabled(!busy);
++            loadWeb.setEnabled(!busy);
++        });
++    }
++
++    private String msg(Throwable e) {
++        return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
++    }
++
++    private LinearLayout.LayoutParams matchWrap() {
++        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
++    }
++
++    private LinearLayout.LayoutParams margin(LinearLayout.LayoutParams lp, int topDp) {
++        lp.topMargin = dp(topDp);
++        return lp;
++    }
++
++    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
++
++    @Override public void onBackPressed() {
++        if (web.canGoBack()) web.goBack(); else super.onBackPressed();
++    }
++
++    @Override protected void onDestroy() {
+         worker.shutdownNow();
++        web.destroy();
+         super.onDestroy();
+     }
++
++    private static final class GiftRef {
++        final String base; final int number;
++        GiftRef(String base, int number) { this.base = base; this.number = number; }
++    }
+ }

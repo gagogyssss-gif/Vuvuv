@@ -1,0 +1,171 @@
+--- NFTRecorderProject/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/H264LottieRenderer.java	2026-09-19 00:36:24.000000000 +0000
++++ NFTRecorderProject/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/H264LottieRenderer.java	2026-09-19 00:46:31.278469892 +0000
+@@ -1,8 +1,10 @@
+ package com.vuvuv.nftrecorder;
+ 
++import android.app.Activity;
+ import android.content.ContentResolver;
+ import android.content.ContentValues;
+ import android.content.Context;
++import android.content.ContextWrapper;
+ import android.graphics.Bitmap;
+ import android.graphics.Canvas;
+ import android.graphics.Color;
+@@ -18,8 +20,11 @@
+ import android.opengl.GLES20;
+ import android.opengl.GLUtils;
+ import android.os.Build;
++import android.os.Handler;
++import android.os.Looper;
+ import android.os.SystemClock;
+ import android.provider.MediaStore;
++import android.view.PixelCopy;
+ import android.view.Surface;
+ import android.webkit.WebView;
+ 
+@@ -131,8 +136,41 @@
+      * inside a 1920x1080 H.264 video. This is a real-time web capture, while Lottie
+      * rendering above is deterministic/offline.
+      */
++    /**
++     * Records the centered square of the visible WebView using PixelCopy.
++     * PixelCopy captures the final Android window composition, including GPU/WebGL/canvas
++     * layers that WebView.draw() can miss. The user can pinch-zoom/pan the page first.
++     */
+     public String renderWebCard(WebView webView, int seconds, String displayName, ProgressListener listener) throws Exception {
+         if (webView == null) throw new Exception("WebView is null");
++        Activity activity = findActivity(webView.getContext());
++        if (activity == null) throw new Exception("Activity not found for PixelCopy");
++
++        final Rect[] srcRectHolder = new Rect[1];
++        final int[] sideHolder = new int[1];
++        CountDownLatch geometryLatch = new CountDownLatch(1);
++        webView.post(() -> {
++            try {
++                int vw = webView.getWidth();
++                int vh = webView.getHeight();
++                if (vw <= 0 || vh <= 0) throw new IllegalStateException("WebView has no size");
++                int side = Math.min(vw, vh);
++                int[] loc = new int[2];
++                webView.getLocationInWindow(loc);
++                int left = loc[0] + Math.max(0, (vw - side) / 2);
++                int top = loc[1] + Math.max(0, (vh - side) / 2);
++                srcRectHolder[0] = new Rect(left, top, left + side, top + side);
++                sideHolder[0] = side;
++            } finally {
++                geometryLatch.countDown();
++            }
++        });
++        if (!geometryLatch.await(5, TimeUnit.SECONDS) || srcRectHolder[0] == null) {
++            throw new Exception("Could not calculate WebView capture area");
++        }
++
++        final Rect srcRect = srcRectHolder[0];
++        final int srcSide = sideHolder[0];
+         final int frames = Math.max(FPS, seconds * FPS);
+         File temp = new File(context.getCacheDir(), "web-render-" + System.nanoTime() + ".mp4");
+         MediaCodec codec = null;
+@@ -140,6 +178,8 @@
+         EglEncoderSurface egl = null;
+         MediaMuxer muxer = null;
+         Bitmap bitmap = null;
++        Bitmap captureBitmap = null;
++        Handler mainHandler = new Handler(Looper.getMainLooper());
+ 
+         try {
+             codec = createConfiguredEncoder();
+@@ -149,49 +189,37 @@
+             muxer = new MediaMuxer(temp.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+             EncoderDrain drain = new EncoderDrain(codec, muxer);
+             bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888);
++            captureBitmap = Bitmap.createBitmap(srcSide, srcSide, Bitmap.Config.ARGB_8888);
+ 
+-            final Bitmap frameBitmap = bitmap;
+             long startMs = SystemClock.uptimeMillis();
++            int outSide = HEIGHT;
++            int outLeft = (WIDTH - outSide) / 2;
++            Rect outRect = new Rect(outLeft, 0, outLeft + outSide, outSide);
++
+             for (int i = 0; i < frames; i++) {
+                 long due = startMs + Math.round(i * 1000.0 / FPS);
+                 long wait = due - SystemClock.uptimeMillis();
+                 if (wait > 0) SystemClock.sleep(wait);
+ 
+-                CountDownLatch latch = new CountDownLatch(1);
+-                final Throwable[] error = new Throwable[1];
+-                webView.post(() -> {
+-                    try {
+-                        int vw = webView.getWidth();
+-                        int vh = webView.getHeight();
+-                        if (vw <= 0 || vh <= 0) throw new IllegalStateException("WebView has no size");
+-
+-                        Canvas c = new Canvas(frameBitmap);
+-                        c.drawColor(Color.BLACK);
+-                        int srcSide = Math.min(vw, vh);
+-                        int srcLeft = Math.max(0, (vw - srcSide) / 2);
+-                        int srcTop = Math.max(0, (vh - srcSide) / 2);
+-                        int outSide = HEIGHT; // 1080
+-                        int outLeft = (WIDTH - outSide) / 2;
+-
+-                        c.save();
+-                        c.clipRect(outLeft, 0, outLeft + outSide, outSide);
+-                        c.translate(outLeft, 0);
+-                        float scale = (float) outSide / (float) srcSide;
+-                        c.scale(scale, scale);
+-                        c.translate(-srcLeft, -srcTop);
+-                        webView.draw(c);
+-                        c.restore();
+-                    } catch (Throwable t) {
+-                        error[0] = t;
+-                    } finally {
+-                        latch.countDown();
+-                    }
+-                });
+-                if (!latch.await(5, TimeUnit.SECONDS)) throw new Exception("WebView frame timeout");
+-                if (error[0] != null) throw new Exception("WebView draw failed", error[0]);
++                CountDownLatch copyLatch = new CountDownLatch(1);
++                final int[] copyResult = new int[]{PixelCopy.ERROR_UNKNOWN};
++                final Bitmap dst = captureBitmap;
++                PixelCopy.request(activity.getWindow(), srcRect, dst, result -> {
++                    copyResult[0] = result;
++                    copyLatch.countDown();
++                }, mainHandler);
++
++                if (!copyLatch.await(5, TimeUnit.SECONDS)) throw new Exception("PixelCopy timeout");
++                if (copyResult[0] != PixelCopy.SUCCESS) {
++                    throw new Exception("PixelCopy failed: " + copyResult[0]);
++                }
++
++                Canvas c = new Canvas(bitmap);
++                c.drawColor(Color.BLACK);
++                c.drawBitmap(captureBitmap, null, outRect, null);
+ 
+                 long ptsNs = i * 1_000_000_000L / FPS;
+-                egl.draw(frameBitmap, ptsNs);
++                egl.draw(bitmap, ptsNs);
+                 drain.drain(false);
+                 if (listener != null) listener.onProgress((i + 1) * 100 / frames);
+             }
+@@ -202,6 +230,7 @@
+             saveToGallery(temp, sanitizeDisplayName(displayName));
+             return sanitizeDisplayName(displayName);
+         } finally {
++            if (captureBitmap != null) captureBitmap.recycle();
+             if (bitmap != null) bitmap.recycle();
+             if (egl != null) egl.release();
+             if (codecSurface != null) codecSurface.release();
+@@ -216,6 +245,14 @@
+         }
+     }
+ 
++    private static Activity findActivity(Context context) {
++        while (context instanceof ContextWrapper) {
++            if (context instanceof Activity) return (Activity) context;
++            context = ((ContextWrapper) context).getBaseContext();
++        }
++        return context instanceof Activity ? (Activity) context : null;
++    }
++
+     private static String sanitizeDisplayName(String name) {
+         if (name == null || name.trim().isEmpty()) name = "NFT_" + System.currentTimeMillis() + ".mp4";
+         name = name.replaceAll("[^A-Za-z0-9._-]+", "_");

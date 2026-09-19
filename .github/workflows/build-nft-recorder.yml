@@ -1,0 +1,46 @@
+name: Build NFT Recorder APK
+
+on:
+  push:
+    branches: [nft-recorder]
+    paths:
+      - 'NFTRecorderProject.zip'
+      - '.github/workflows/build-nft-recorder.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unpack project
+        run: |
+          rm -rf buildsrc
+          mkdir buildsrc
+          unzip -q NFTRecorderProject.zip -d buildsrc
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        run: gradle -p buildsrc/NFTRecorderProject/nft-recorder :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFT-Recorder-1080p60
+          path: buildsrc/NFTRecorderProject/nft-recorder/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

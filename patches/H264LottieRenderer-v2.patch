@@ -1,0 +1,160 @@
+--- NFTRecorderProject/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/H264LottieRenderer.java	2026-09-18 23:47:19.046548426 +0000
++++ NFTRecorderV2/nft-recorder/app/src/main/java/com/vuvuv/nftrecorder/H264LottieRenderer.java	2026-09-19 00:36:24.359682628 +0000
+@@ -18,8 +18,10 @@
+ import android.opengl.GLES20;
+ import android.opengl.GLUtils;
+ import android.os.Build;
++import android.os.SystemClock;
+ import android.provider.MediaStore;
+ import android.view.Surface;
++import android.webkit.WebView;
+ 
+ import com.airbnb.lottie.LottieComposition;
+ import com.airbnb.lottie.LottieDrawable;
+@@ -33,6 +35,8 @@
+ import java.text.SimpleDateFormat;
+ import java.util.Date;
+ import java.util.Locale;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
+ 
+ public final class H264LottieRenderer {
+     public interface ProgressListener { void onProgress(int percent); }
+@@ -50,6 +54,11 @@
+     }
+ 
+     public String render(LottieComposition composition, ProgressListener listener) throws Exception {
++        String displayName = "NFT_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + "_1080p60.mp4";
++        return render(composition, displayName, listener);
++    }
++
++    public String render(LottieComposition composition, String displayName, ProgressListener listener) throws Exception {
+         File temp = new File(context.getCacheDir(), "nft-render-" + System.nanoTime() + ".mp4");
+         MediaCodec codec = null;
+         Surface codecSurface = null;
+@@ -93,18 +102,105 @@
+                 egl.draw(bitmap, ptsNs);
+                 drain.drain(false);
+ 
+-                if (listener != null) {
+-                    listener.onProgress((i + 1) * 100 / frameCount);
+-                }
++                if (listener != null) listener.onProgress((i + 1) * 100 / frameCount);
+             }
+ 
+             codec.signalEndOfInputStream();
+             drain.drain(true);
+             drain.finish();
++            saveToGallery(temp, sanitizeDisplayName(displayName));
++            return sanitizeDisplayName(displayName);
++        } finally {
++            if (bitmap != null) bitmap.recycle();
++            if (egl != null) egl.release();
++            if (codecSurface != null) codecSurface.release();
++            if (codec != null) {
++                try { codec.stop(); } catch (Exception ignored) {}
++                codec.release();
++            }
++            if (muxer != null) {
++                try { muxer.release(); } catch (Exception ignored) {}
++            }
++            if (temp.exists()) temp.delete();
++        }
++    }
+ 
+-            String displayName = "NFT_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + "_1080p60.mp4";
+-            saveToGallery(temp, displayName);
+-            return displayName;
++    /**
++     * Records the currently visible WebView area. The user can pinch-zoom/pan first.
++     * The centered square of the viewport is drawn into a 1080x1080 square centered
++     * inside a 1920x1080 H.264 video. This is a real-time web capture, while Lottie
++     * rendering above is deterministic/offline.
++     */
++    public String renderWebCard(WebView webView, int seconds, String displayName, ProgressListener listener) throws Exception {
++        if (webView == null) throw new Exception("WebView is null");
++        final int frames = Math.max(FPS, seconds * FPS);
++        File temp = new File(context.getCacheDir(), "web-render-" + System.nanoTime() + ".mp4");
++        MediaCodec codec = null;
++        Surface codecSurface = null;
++        EglEncoderSurface egl = null;
++        MediaMuxer muxer = null;
++        Bitmap bitmap = null;
++
++        try {
++            codec = createConfiguredEncoder();
++            codecSurface = codec.createInputSurface();
++            codec.start();
++            egl = new EglEncoderSurface(codecSurface);
++            muxer = new MediaMuxer(temp.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
++            EncoderDrain drain = new EncoderDrain(codec, muxer);
++            bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888);
++
++            final Bitmap frameBitmap = bitmap;
++            long startMs = SystemClock.uptimeMillis();
++            for (int i = 0; i < frames; i++) {
++                long due = startMs + Math.round(i * 1000.0 / FPS);
++                long wait = due - SystemClock.uptimeMillis();
++                if (wait > 0) SystemClock.sleep(wait);
++
++                CountDownLatch latch = new CountDownLatch(1);
++                final Throwable[] error = new Throwable[1];
++                webView.post(() -> {
++                    try {
++                        int vw = webView.getWidth();
++                        int vh = webView.getHeight();
++                        if (vw <= 0 || vh <= 0) throw new IllegalStateException("WebView has no size");
++
++                        Canvas c = new Canvas(frameBitmap);
++                        c.drawColor(Color.BLACK);
++                        int srcSide = Math.min(vw, vh);
++                        int srcLeft = Math.max(0, (vw - srcSide) / 2);
++                        int srcTop = Math.max(0, (vh - srcSide) / 2);
++                        int outSide = HEIGHT;
++                        int outLeft = (WIDTH - outSide) / 2;
++
++                        c.save();
++                        c.clipRect(outLeft, 0, outLeft + outSide, outSide);
++                        c.translate(outLeft, 0);
++                        float scale = (float) outSide / (float) srcSide;
++                        c.scale(scale, scale);
++                        c.translate(-srcLeft, -srcTop);
++                        webView.draw(c);
++                        c.restore();
++                    } catch (Throwable t) {
++                        error[0] = t;
++                    } finally {
++                        latch.countDown();
++                    }
++                });
++                if (!latch.await(5, TimeUnit.SECONDS)) throw new Exception("WebView frame timeout");
++                if (error[0] != null) throw new Exception("WebView draw failed", error[0]);
++
++                long ptsNs = i * 1_000_000_000L / FPS;
++                egl.draw(frameBitmap, ptsNs);
++                drain.drain(false);
++                if (listener != null) listener.onProgress((i + 1) * 100 / frames);
++            }
++
++            codec.signalEndOfInputStream();
++            drain.drain(true);
++            drain.finish();
++            saveToGallery(temp, sanitizeDisplayName(displayName));
++            return sanitizeDisplayName(displayName);
+         } finally {
+             if (bitmap != null) bitmap.recycle();
+             if (egl != null) egl.release();
+@@ -120,6 +216,13 @@
+         }
+     }
+ 
++    private static String sanitizeDisplayName(String name) {
++        if (name == null || name.trim().isEmpty()) name = "NFT_" + System.currentTimeMillis() + ".mp4";
++        name = name.replaceAll("[^A-Za-z0-9._-]+", "_");
++        if (!name.toLowerCase(Locale.ROOT).endsWith(".mp4")) name += ".mp4";
++        return name;
++    }
++
+ 
+     private MediaCodec createConfiguredEncoder() throws Exception {
+         Exception last = null;

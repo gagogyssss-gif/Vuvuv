@@ -26,9 +26,9 @@ jobs:
           patch -p0 < ../patches/MainActivity-v2.patch
           python ../patches/apply-v3.py
           python ../patches/apply-v4-zoom.py
-          python ../patches/apply-v5-telegram-links.py
+          python ../patches/apply-v5-telegram-links.py\n          python ../patches/apply-v6-batch-import.py
           echo "android.useAndroidX=true" > NFTRecorderProject/nft-recorder/gradle.properties
-          sed -i 's/versionCode 1/versionCode 5/; s/versionCode 2/versionCode 5/; s/versionName .0.1.0./versionName '\''0.3.0'\''/; s/versionName .0.2.0./versionName '\''0.3.0'\''/' NFTRecorderProject/nft-recorder/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 6/; s/versionCode 2/versionCode 6/; s/versionName .0.1.0./versionName '\''0.3.0'\''/; s/versionName .0.2.0./versionName '\''0.3.0'\''/' NFTRecorderProject/nft-recorder/app/build.gradle
 
       - uses: actions/setup-java@v5
         with:
@@ -56,6 +56,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NFT-Recorder-v5-TelegramFix
+          name: NFT-Recorder-v6-BatchImportAutoCrop
           path: buildsrc/NFTRecorderProject/nft-recorder/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

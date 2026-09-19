@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack and patch v3
+      - name: Unpack and patch v6
         run: |
           rm -rf buildsrc
           mkdir buildsrc
@@ -26,9 +26,10 @@ jobs:
           patch -p0 < ../patches/MainActivity-v2.patch
           python ../patches/apply-v3.py
           python ../patches/apply-v4-zoom.py
-          python ../patches/apply-v5-telegram-links.py\n          python ../patches/apply-v6-batch-import.py
+          python ../patches/apply-v5-telegram-links.py
+          python ../patches/apply-v6-batch-import.py
           echo "android.useAndroidX=true" > NFTRecorderProject/nft-recorder/gradle.properties
-          sed -i 's/versionCode 1/versionCode 6/; s/versionCode 2/versionCode 6/; s/versionName .0.1.0./versionName '\''0.3.0'\''/; s/versionName .0.2.0./versionName '\''0.3.0'\''/' NFTRecorderProject/nft-recorder/app/build.gradle
+          sed -i "s/versionCode 1/versionCode 6/; s/versionCode 2/versionCode 6/; s/versionName '0.1.0'/versionName '0.4.0'/; s/versionName '0.2.0'/versionName '0.4.0'/" NFTRecorderProject/nft-recorder/app/build.gradle
 
       - uses: actions/setup-java@v5
         with:

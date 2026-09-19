@@ -20,6 +20,7 @@ jobs:
           rm -rf buildsrc
           mkdir buildsrc
           unzip -q NFTRecorderProject.zip -d buildsrc
+          echo "android.useAndroidX=true" > buildsrc/NFTRecorderProject/nft-recorder/gradle.properties
 
       - uses: actions/setup-java@v5
         with:

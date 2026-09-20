@@ -1,0 +1,43 @@
+{
+  "schema": "game-room.room-final-report.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "gates": {"function": false, "form": false, "runtime": false},
+  "formChecks": {
+    "floorPlanParity": false,
+    "primaryArrival": false,
+    "symmetry": false,
+    "shell": false,
+    "manifold": false,
+    "booleans": false,
+    "collisions": false,
+    "support": false,
+    "attachmentOrientation": false,
+    "ceilingAttachmentOrientation": false,
+    "seatingOrientation": false,
+    "focalDistribution": false,
+    "heroClearance": false,
+    "colonnades": false,
+    "screenClearance": false,
+    "scale": false,
+    "camera": false,
+    "ceilingCoverage": false,
+    "environmentCoverage": false,
+    "provenance": false
+  },
+  "reviewRenders": {"corners":[],"ceiling":[],"environment":{}},
+  "runtimeChecks": {
+    "vlow": false,
+    "textureTiers": false,
+    "lightmap": false,
+    "lightingManifest": false,
+    "performance": false,
+    "browserCapture": "",
+    "errors": []
+  },
+  "postmortem": {
+    "observations": ["Initial vertical slice uses procedural primitives to validate gameplay before paid hero-model generation."],
+    "corrections": [],
+    "remainingRisks": ["Android export unverified on CI","hero GLB models not generated","audio and skeletal animation not authored"]
+  },
+  "proposedLessons": []
+}

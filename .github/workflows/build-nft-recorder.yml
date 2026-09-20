@@ -1,10 +1,10 @@
-name: Build NFT Recorder v7 APK
+name: Build NFT Recorder v8 APK
 
 on:
   push:
     branches: [nft-recorder]
     paths:
-      - 'v7/**'
+      - 'v8/**'
       - '.github/workflows/build-nft-recorder.yml'
   workflow_dispatch:
 
@@ -15,15 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rebuild v7 project archive
+      - name: Reconstruct v8 project
         shell: bash
         run: |
-          cat             v7/project.b64.00             v7/project.b64.01             v7/project.b64.02             v7/project.b64.030             v7/project.b64.031             v7/project.b64.040             v7/project.b64.041 > /tmp/nft-v7.b64
-          base64 -d /tmp/nft-v7.b64 > /tmp/NFTRecorderProject-v7.zip
-          unzip -t /tmp/NFTRecorderProject-v7.zip
           rm -rf buildsrc
-          mkdir buildsrc
-          unzip -q /tmp/NFTRecorderProject-v7.zip -d buildsrc
+          mkdir -p buildsrc
+          cat v8/project.b64.* > /tmp/nft-v8.b64
+          base64 -d /tmp/nft-v8.b64 > /tmp/NFTRecorderProject-v8.zip
+          unzip -q /tmp/NFTRecorderProject-v8.zip -d buildsrc
+          test -f buildsrc/NFTRecorderProject/nft-recorder/app/build.gradle
+          grep -q "versionCode 8" buildsrc/NFTRecorderProject/nft-recorder/app/build.gradle
 
       - uses: actions/setup-java@v5
         with:
@@ -42,15 +43,15 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build v7 APK
+      - name: Build debug APK
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: gradle -p buildsrc/NFTRecorderProject/nft-recorder :app:assembleDebug --stacktrace
 
-      - name: Upload v7 APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NFT-Recorder-v7
+          name: NFT-Recorder-v8-FrameFix
           path: buildsrc/NFTRecorderProject/nft-recorder/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

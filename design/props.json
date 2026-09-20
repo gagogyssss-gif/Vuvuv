@@ -1,0 +1,37 @@
+{
+  "schema": "game-room.prop-manifest.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "generation": {
+    "provider": "meshy",
+    "apiModel": "meshy-5",
+    "pricingSource": "https://docs.meshy.ai/en/api/pricing",
+    "pricingVerifiedAt": "",
+    "creditsPerTexturedTask": 15,
+    "hardCreditCeiling": 0,
+    "maxChargedAttemptsPerAsset": 2
+  },
+  "assets": [
+    {
+      "id": "archive-stag",
+      "function": "worn roaming threat / silhouette anchor",
+      "dimensionsMeters": [1.55, 3.25, 0.9],
+      "attachmentFace": "feet",
+      "semanticFront": "-Z",
+      "reuseClass": "hero",
+      "targetPolycount": 18000,
+      "prompt": "Original worn animatronic stag, industrial family-entertainment robot, exposed joints, asymmetrical shell damage, full uncropped body, neutral three-quarter studio view, readable back construction, no text, no logo, no existing franchise character",
+      "rejectionCriteria": ["resembles an existing copyrighted mascot","missing feet or back surface","fused limbs","unusable silhouette"]
+    },
+    {
+      "id": "showline-raccoon",
+      "function": "cleaner second-generation roaming threat",
+      "dimensionsMeters": [1.5, 3.15, 0.9],
+      "attachmentFace": "feet",
+      "semanticFront": "-Z",
+      "reuseClass": "hero",
+      "targetPolycount": 18000,
+      "prompt": "Original polished stage animatronic raccoon, 1990s family venue robotics language, modular shell, expressive mechanical eyes, full uncropped body, neutral three-quarter studio view, no text, no logo, no existing franchise character",
+      "rejectionCriteria": ["resembles an existing copyrighted mascot","missing supports","fused geometry","wrong construction"]
+    }
+  ]
+}

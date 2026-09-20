@@ -1,0 +1,52 @@
+{
+  "schema": "game-room.room-brief.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "family": "gameplay-room",
+  "purpose": "Fixed-office survival-horror loop with security-camera observation and timed defensive actions.",
+  "runtimeSurface": "Godot 4.7.2, Android landscape 1280x720 design viewport",
+  "boundsMeters": [20, 5, 28],
+  "hero": {
+    "id": "security-office",
+    "role": "primary player viewpoint and interaction hub",
+    "reservedBoundsMeters": [9.5, 4.2, 7]
+  },
+  "symmetry": {
+    "mode": "bilateral",
+    "order": 2,
+    "appliesTo": ["office shell", "left/right defensive apertures", "primary corridor readability"],
+    "exceptions": ["camera room dressing", "animatronic routes"]
+  },
+  "circulation": {
+    "description": "No free player locomotion; enemy routes traverse camera-visible halls into four office threat lanes.",
+    "minimumClearanceMeters": 1.1
+  },
+  "productionCamera": {
+    "viewport": [1280, 720],
+    "location": [0, 1.85, 5.8],
+    "target": [0, 1.45, -1],
+    "verticalFovDegrees": 67
+  },
+  "performanceBudget": {
+    "maxSceneTriangles": 180000,
+    "maxVLowBytes": 45000000,
+    "maxHighTextureBytes": 192000000
+  },
+  "creditBudget": {
+    "maximumCredits": 0,
+    "approvalRequired": true
+  },
+  "environment": {
+    "type": "procedural",
+    "identity": "nightshift-industrial-interior",
+    "source": "in-engine geometry and lighting",
+    "assignmentKey": "nightshift-after-hours-v1"
+  },
+  "artifacts": {
+    "floorPlan": "design/floor-plan.md",
+    "reflectedCeilingPlan": "",
+    "planMetadata": "design/room-layout.json",
+    "wallElevations": [],
+    "visualTarget": "dark industrial family venue; cold office light; dirty warm stage accents; low-spec Android readability",
+    "openingContactSheet": ""
+  }
+}

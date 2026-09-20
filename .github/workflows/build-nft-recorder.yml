@@ -1,4 +1,5 @@
 name: Build NFT Recorder v8 APK
+# all v8 chunks ready
 
 on:
   push:

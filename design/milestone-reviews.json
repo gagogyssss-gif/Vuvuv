@@ -1,0 +1,14 @@
+{
+  "schema": "game-room.milestone-reviews.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "function": {
+    "status": "pending",
+    "approvedBy": "",
+    "approvedAt": "",
+    "evidence": ["design/room-brief.json","design/room-layout.json","design/props.json","design/openings.json"],
+    "strangestElement": "The office has both powered shutters and a disguise visor; the gameplay promise is that different enemy classes demand different counters.",
+    "notes": "Awaiting explicit user approval before any paid 3D generation."
+  },
+  "form": {"status":"pending","approvedBy":"","approvedAt":"","evidence":[],"strangestElement":"","notes":""},
+  "runtime": {"status":"pending","approvedBy":"","approvedAt":"","evidence":[],"strangestElement":"","notes":""}
+}

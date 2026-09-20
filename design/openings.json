@@ -1,0 +1,13 @@
+{
+  "schema": "game-room.opening-schedule.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "primaryArrival": {
+    "openingId": "office-center-hall",
+    "exception": "Fixed-office survival gameplay intentionally uses a narrow visual threat aperture instead of a player-traversable 2.4 m arrival."
+  },
+  "openings": [
+    {"id":"office-center-hall","type":"door","wall":"office-front","destination":"main-hall","widthMeters":1.6,"heightMeters":3.2,"thresholdMeters":0,"depthMeters":0.25},
+    {"id":"office-left-lane","type":"door","wall":"office-front-left","destination":"left-hall","widthMeters":2.0,"heightMeters":3.3,"thresholdMeters":0,"depthMeters":0.25},
+    {"id":"office-right-lane","type":"door","wall":"office-front-right","destination":"right-hall","widthMeters":2.0,"heightMeters":3.3,"thresholdMeters":0,"depthMeters":0.25}
+  ]
+}

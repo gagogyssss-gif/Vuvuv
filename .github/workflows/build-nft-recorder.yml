@@ -1,11 +1,10 @@
-name: Build NFT Recorder APK
+name: Build NFT Recorder v7 APK
 
 on:
   push:
     branches: [nft-recorder]
     paths:
-      - 'NFTRecorderProject.zip'
-      - 'patches/**'
+      - 'v7/**'
       - '.github/workflows/build-nft-recorder.yml'
   workflow_dispatch:
 
@@ -16,20 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack and patch v6
+      - name: Rebuild v7 project archive
+        shell: bash
         run: |
+          cat             v7/project.b64.00             v7/project.b64.01             v7/project.b64.02             v7/project.b64.030             v7/project.b64.031             v7/project.b64.040             v7/project.b64.041 > /tmp/nft-v7.b64
+          base64 -d /tmp/nft-v7.b64 > /tmp/NFTRecorderProject-v7.zip
+          unzip -t /tmp/NFTRecorderProject-v7.zip
           rm -rf buildsrc
           mkdir buildsrc
-          unzip -q NFTRecorderProject.zip -d buildsrc
-          cd buildsrc
-          patch -p0 < ../patches/H264LottieRenderer-v2.patch
-          patch -p0 < ../patches/MainActivity-v2.patch
-          python ../patches/apply-v3.py
-          python ../patches/apply-v4-zoom.py
-          python ../patches/apply-v5-telegram-links.py
-          python ../patches/apply-v6-batch-import.py
-          echo "android.useAndroidX=true" > NFTRecorderProject/nft-recorder/gradle.properties
-          sed -i "s/versionCode 1/versionCode 6/; s/versionCode 2/versionCode 6/; s/versionName '0.1.0'/versionName '0.4.0'/; s/versionName '0.2.0'/versionName '0.4.0'/" NFTRecorderProject/nft-recorder/app/build.gradle
+          unzip -q /tmp/NFTRecorderProject-v7.zip -d buildsrc
 
       - uses: actions/setup-java@v5
         with:
@@ -48,15 +42,15 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
+      - name: Build v7 APK
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: gradle -p buildsrc/NFTRecorderProject/nft-recorder :app:assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Upload v7 APK
         uses: actions/upload-artifact@v4
         with:
-          name: NFT-Recorder-v6-BatchImportAutoCrop
+          name: NFT-Recorder-v7
           path: buildsrc/NFTRecorderProject/nft-recorder/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

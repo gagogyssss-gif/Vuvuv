@@ -1,0 +1,22 @@
+{
+  "schema": "game-room.layout.v1",
+  "roomId": "nightshift-after-hours-v1",
+  "units": "meters",
+  "surfaces": [
+    {"id":"office","type":"room","center":[0,2,3],"size":[9.5,4.2,7]},
+    {"id":"main-hall","type":"corridor","center":[0,2,-7.5],"size":[7,4,14]},
+    {"id":"left-hall","type":"corridor","center":[-6.2,1.75,-5.5],"size":[5.2,3.5,8]},
+    {"id":"right-hall","type":"corridor","center":[6.2,1.75,-5.5],"size":[5.2,3.5,8]},
+    {"id":"stage","type":"room","center":[0,2,-16],"size":[13,4,8]}
+  ],
+  "instances": [
+    {"id":"left-shutter","position":[-2,1.45,-0.35],"function":"powered defense"},
+    {"id":"right-shutter","position":[2,1.45,-0.35],"function":"powered defense"},
+    {"id":"desk","position":[0,0.55,1.55],"function":"office foreground anchor"}
+  ],
+  "productionCamera": {
+    "location":[0,1.85,5.8],
+    "target":[0,1.45,-1],
+    "verticalFovDegrees":67
+  }
+}

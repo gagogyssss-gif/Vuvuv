@@ -18,6 +18,7 @@ window/handheld/orientation=1
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.004, 0.006, 0.008, 1)
+textures/vram_compression/import_etc2_astc=true
 
 [input]
 toggle_monitor={

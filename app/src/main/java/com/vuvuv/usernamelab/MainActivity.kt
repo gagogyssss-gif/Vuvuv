@@ -5,7 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,6 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,17 +59,116 @@ private fun UsernameLabScreen() {
     var filters by remember { mutableStateOf(store.get()) }
     var candidate by remember { mutableStateOf(repo.next(filters) ?: "—") }
     var refresh by remember { mutableIntStateOf(0) }
+    var customRefresh by remember { mutableIntStateOf(0) }
+    var pasteDialog by remember { mutableStateOf(false) }
+    var pasteText by remember { mutableStateOf("") }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+
     val history = remember(refresh) { repo.history() }
+    val customCount = remember(customRefresh) { repo.customCount() }
 
     fun updateFilters(next: CandidateFilters) {
         val safe = if (
             !next.meaningful && !next.randomFive && !next.translit &&
-            !next.compounds && !next.shuzoGram
+            !next.compounds && !next.shuzoGram && !next.custom
         ) next.copy(meaningful = true) else next
 
         filters = safe
         store.save(safe)
         candidate = repo.next(safe) ?: "—"
+    }
+
+    fun activateCustomOnly() {
+        val customOnly = CandidateFilters(
+            meaningful = false,
+            randomFive = false,
+            translit = false,
+            compounds = false,
+            shuzoGram = false,
+            custom = true,
+            exactFive = false,
+        )
+        filters = customOnly
+        store.save(customOnly)
+        candidate = repo.next(customOnly) ?: "—"
+    }
+
+    fun importCustom(text: String, append: Boolean) {
+        val count = repo.importCustomText(text, append)
+        customRefresh++
+        activateCustomOnly()
+        importMessage = "Загружено юзов: $count. Сейчас включён режим «Только мои»."
+    }
+
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    ?: ""
+            }.onSuccess { text ->
+                importCustom(text, append = true)
+            }.onFailure {
+                importMessage = "Не удалось прочитать файл."
+            }
+        }
+    }
+
+    if (pasteDialog) {
+        AlertDialog(
+            onDismissRequest = { pasteDialog = false },
+            title = { Text("Вставить свои юзы") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Можно вставлять по одному в строке, через пробел/запятую или вместе с @. Разрешены 5–32 символа: A–Z, a–z, 0–9 и _.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = pasteText,
+                        onValueChange = { pasteText = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 320.dp),
+                        placeholder = { Text("@trade\npizza\nMyUser\nOmniHash") },
+                        minLines = 7
+                    )
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        enabled = pasteText.isNotBlank(),
+                        onClick = {
+                            importCustom(pasteText, append = false)
+                            pasteText = ""
+                            pasteDialog = false
+                        }
+                    ) {
+                        Text("Заменить")
+                    }
+                    Button(
+                        enabled = pasteText.isNotBlank(),
+                        onClick = {
+                            importCustom(pasteText, append = true)
+                            pasteText = ""
+                            pasteDialog = false
+                        }
+                    ) {
+                        Text("Добавить")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pasteDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
     }
 
     val background = Brush.verticalGradient(
@@ -101,10 +205,95 @@ private fun UsernameLabScreen() {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "20k общий пул + отдельные modern, translit и ShuzoGram категории.",
+                    "Встроенные базы + свой личный список юзов.",
                     color = Color(0xFF9299A6),
                     fontSize = 14.sp
                 )
+            }
+
+            item {
+                GlassCard {
+                    Text(
+                        "Мои юзы",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Сейчас сохранено: $customCount. Можно загрузить TXT/CSV или просто вставить слова.",
+                        color = Color(0xFF8992A0),
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = {
+                                filePicker.launch(
+                                    arrayOf(
+                                        "text/plain",
+                                        "text/csv",
+                                        "application/octet-stream"
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.FolderOpen, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Файл")
+                        }
+
+                        OutlinedButton(
+                            onClick = { pasteDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Rounded.Edit, null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Вставить")
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        FilledTonalButton(
+                            enabled = customCount > 0,
+                            onClick = { activateCustomOnly() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Только мои")
+                        }
+
+                        OutlinedButton(
+                            enabled = customCount > 0,
+                            onClick = {
+                                repo.clearCustom()
+                                customRefresh++
+                                if (filters.custom) {
+                                    updateFilters(filters.copy(custom = false))
+                                }
+                                importMessage = "Мой список очищен."
+                            }
+                        ) {
+                            Icon(Icons.Rounded.Delete, null)
+                        }
+                    }
+
+                    if (importMessage != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            importMessage!!,
+                            color = Color(0xFF70B9FF),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
 
             item {
@@ -121,6 +310,12 @@ private fun UsernameLabScreen() {
                         fontSize = 13.sp
                     )
                     Spacer(Modifier.height(10.dp))
+
+                    FilterRow(
+                        "Мои юзы",
+                        "Использует только слова, которые ты добавил сам.",
+                        filters.custom
+                    ) { updateFilters(filters.copy(custom = it)) }
 
                     FilterRow(
                         "Осмысленные",
@@ -164,7 +359,7 @@ private fun UsernameLabScreen() {
                         FilterChip(
                             selected = !filters.exactFive,
                             onClick = { updateFilters(filters.copy(exactFive = false)) },
-                            label = { Text("5+ букв") }
+                            label = { Text("5–32") }
                         )
                     }
                 }
@@ -240,7 +435,7 @@ private fun UsernameLabScreen() {
 
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Отмеченные занятыми варианты сохраняются и больше не выдаются.",
+                        "Занятые варианты сохраняются и больше не выдаются, в том числе из твоего списка.",
                         color = Color(0xFF798291),
                         fontSize = 12.sp
                     )

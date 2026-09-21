@@ -10,6 +10,7 @@ data class CandidateFilters(
     val translit: Boolean = false,
     val compounds: Boolean = false,
     val shuzoGram: Boolean = false,
+    val custom: Boolean = false,
     val exactFive: Boolean = true,
 )
 
@@ -24,6 +25,7 @@ class FilterStore(context: Context) {
         translit = prefs.getBoolean("translit", false),
         compounds = prefs.getBoolean("compounds", false),
         shuzoGram = prefs.getBoolean("shuzoGram", false),
+        custom = prefs.getBoolean("custom", false),
         exactFive = prefs.getBoolean("exactFive", true),
     )
 
@@ -34,6 +36,7 @@ class FilterStore(context: Context) {
             .putBoolean("translit", v.translit)
             .putBoolean("compounds", v.compounds)
             .putBoolean("shuzoGram", v.shuzoGram)
+            .putBoolean("custom", v.custom)
             .putBoolean("exactFive", v.exactFive)
             .apply()
     }
@@ -42,6 +45,7 @@ class FilterStore(context: Context) {
 class CandidateRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("candidate_state", Context.MODE_PRIVATE)
     private val sessionSeen = LinkedHashSet<String>()
+    private val customFileName = "custom_candidates.txt"
 
     private val general by lazy { readAsset("general_candidates.txt") }
     private val shuzo by lazy { readAsset("shuzogram_candidates.txt") }
@@ -51,39 +55,50 @@ class CandidateRepository(private val context: Context) {
         context.assets.open(name).bufferedReader().useLines { lines ->
             lines.map { it.trim() }
                 .filter { it.length in 5..32 && it.matches(Regex("[A-Za-z0-9_]+")) }
-                .distinct()
+                .distinctBy { it.lowercase() }
                 .toList()
         }
+
+    private fun readCustom(): List<String> = runCatching {
+        context.openFileInput(customFileName).bufferedReader().useLines { lines ->
+            lines.map { it.trim() }
+                .filter { it.length in 5..32 && it.matches(Regex("[A-Za-z0-9_]+")) }
+                .distinctBy { it.lowercase() }
+                .toList()
+        }
+    }.getOrDefault(emptyList())
 
     private fun taken(): Set<String> = prefs.getStringSet("taken", emptySet()) ?: emptySet()
     private fun free(): Set<String> = prefs.getStringSet("free", emptySet()) ?: emptySet()
 
     fun next(filters: CandidateFilters): String? {
-        val blocked = taken() + free() + sessionSeen
+        val blocked = (taken() + free() + sessionSeen).mapTo(HashSet()) { it.lowercase() }
         val candidates = ArrayList<String>(4096)
+
+        fun addCandidate(value: String) {
+            if (lengthOk(value, filters.exactFive) && value.lowercase() !in blocked) {
+                candidates += value
+            }
+        }
 
         if (filters.meaningful || filters.compounds) {
             general.forEach { word ->
                 val isCompound = word.drop(1).any { it.isUpperCase() }
                 val use = (filters.meaningful && !isCompound) || (filters.compounds && isCompound)
-                if (use && lengthOk(word, filters.exactFive) && word !in blocked) candidates += word
+                if (use) addCandidate(word)
             }
         }
 
-        if (filters.translit) {
-            translit.forEach { if (lengthOk(it, filters.exactFive) && it !in blocked) candidates += it }
-        }
-
-        if (filters.shuzoGram) {
-            shuzo.forEach { if (lengthOk(it, filters.exactFive) && it !in blocked) candidates += it }
-        }
+        if (filters.translit) translit.forEach(::addCandidate)
+        if (filters.shuzoGram) shuzo.forEach(::addCandidate)
+        if (filters.custom) readCustom().forEach(::addCandidate)
 
         if (filters.randomFive) {
             repeat(128) {
                 val random = buildString(5) {
                     repeat(5) { append(('a'.code + Random.nextInt(26)).toChar()) }
                 }
-                if (random !in blocked) candidates += random
+                addCandidate(random)
             }
         }
 
@@ -95,6 +110,41 @@ class CandidateRepository(private val context: Context) {
 
     private fun lengthOk(value: String, exactFive: Boolean): Boolean =
         if (exactFive) value.length == 5 else value.length in 5..32
+
+    fun importCustomText(text: String, append: Boolean): Int {
+        val incoming = parseCustomText(text)
+        val combined = if (append) readCustom() + incoming else incoming
+        val unique = LinkedHashMap<String, String>()
+        combined.forEach { unique.putIfAbsent(it.lowercase(), it) }
+
+        context.openFileOutput(customFileName, Context.MODE_PRIVATE).bufferedWriter().use { writer ->
+            unique.values.forEach {
+                writer.append(it)
+                writer.newLine()
+            }
+        }
+        sessionSeen.clear()
+        return unique.size
+    }
+
+    fun customCount(): Int = readCustom().size
+
+    fun clearCustom() {
+        runCatching { context.deleteFile(customFileName) }
+        sessionSeen.clear()
+    }
+
+    private fun parseCustomText(text: String): List<String> {
+        val tokens = Regex("@?[A-Za-z0-9_]{5,32}")
+            .findAll(text)
+            .map { it.value.removePrefix("@") }
+            .filter { it.matches(Regex("[A-Za-z0-9_]{5,32}")) }
+            .toList()
+
+        val unique = LinkedHashMap<String, String>()
+        tokens.forEach { unique.putIfAbsent(it.lowercase(), it) }
+        return unique.values.toList()
+    }
 
     fun mark(name: String, status: CandidateStatus) {
         val taken = taken().toMutableSet()

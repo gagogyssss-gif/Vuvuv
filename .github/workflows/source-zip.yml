@@ -1,0 +1,24 @@
+name: Package source ZIP
+
+on:
+  push:
+    branches:
+      - chatgpt/username-lab
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create source archive
+        run: |
+          zip -r Vuvuv-Username-Lab-source.zip .             -x ".git/*"                "app/build/*"                ".gradle/*"                "**/.DS_Store"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vuvuv-Username-Lab-source
+          path: Vuvuv-Username-Lab-source.zip
+          if-no-files-found: error

@@ -54,6 +54,7 @@ private fun UsernameLabScreen() {
     var filters by remember { mutableStateOf(store.get()) }
     var candidate by remember { mutableStateOf(repo.next(filters) ?: "—") }
     var refresh by remember { mutableIntStateOf(0) }
+    val history = remember(refresh) { repo.history() }
 
     fun updateFilters(next: CandidateFilters) {
         val safe = if (
@@ -256,7 +257,7 @@ private fun UsernameLabScreen() {
             }
 
             items(
-                items = remember(refresh) { repo.history() },
+                items = history,
                 key = { it.first }
             ) { (name, status) ->
                 HistoryRow(name, status)
